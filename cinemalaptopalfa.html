@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cinema Laptop</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{margin:0;font-family:Arial;background:#0f0f0f;color:white;}
+header{background:#181818;padding:10px;display:flex;align-items:center;gap:10px;}
+.logoBox{display:flex;align-items:center;gap:10px;}
+.logoBox img{height:36px;}
+.logoText{font-size:20px;font-weight:bold;}
+header input{flex:1;padding:8px;border-radius:6px;border:none;}
+header label{background:#cc0000;padding:8px 12px;border-radius:8px;cursor:pointer;}
+header input[type=file]{display:none;}
+
+.container{display:grid;grid-template-columns:220px 1fr;}
+.sidebar{background:#181818;min-height:100vh;padding:10px;}
+.sidebar button{width:100%;margin-bottom:10px;padding:10px;border:none;border-radius:8px;background:#272727;color:white;cursor:pointer;}
+.content{padding:10px;}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
+.card{background:#202020;border-radius:10px;overflow:hidden;cursor:pointer;}
+.card video{width:100%;}
+.title{padding:8px;font-size:14px;}
+.stars span{cursor:pointer;font-size:18px;color:#555;}
+.stars .on{color:gold;}
+
+.player{display:none;}
+.player video{width:100%;max-height:70vh;}
+
+.actions{margin:10px 0;display:flex;gap:10px;flex-wrap:wrap;}
+.actions button,.actions a{padding:8px 12px;border:none;border-radius:8px;background:#272727;color:white;cursor:pointer;text-decoration:none;}
+.danger{background:#a00000;}
+
+.back{margin:10px 0;padding:8px;border:none;border-radius:8px;background:#cc0000;color:white;cursor:pointer;}
+
+#fullscreenBtn{position:fixed;right:10px;bottom:10px;z-index:20;padding:10px 14px;border-radius:50px;border:none;background:#cc0000;color:white;cursor:pointer;}
+
+.splash{position:fixed;inset:0;background:#0f0f0f;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:28px;z-index:10;gap:20px;}
+.splash img{width:200px;}
+
+#commentsList div{background:#202020;margin:5px 0;padding:6px;border-radius:6px;}
+</style>
+</head>
+<body>
+
+<div id="splash" class="splash">
+  <img src="logo.png">
+  <div>🎬 CINEMA LAPTOP</div>
+</div>
+
+<button id="fullscreenBtn">⛶ Pantalla completa</button>
+
+<header>
+  <div class="logoBox">
+    <img src="logo.png">
+    <div class="logoText">🎬 CINEMA LAPTOP</div>
+  </div>
+  <input id="search" placeholder="Buscar video...">
+  <label>➕ Subir video <input id="upload" type="file" accept="video/*"></label>
+</header>
+
+<div class="container">
+  <div class="sidebar">
+    <button onclick="filterCategory('Todas')">🏠 Todas</button>
+    <button onclick="filterCategory('Acción')">🎯 Acción</button>
+    <button onclick="filterCategory('Demo')">🎬 Demo</button>
+    <button onclick="filterCategory('Terror')">👻 Terror</button>
+    <button onclick="filterCategory('Comedia')">😂 Comedia</button>
+    <button onclick="filterCategory('Drama')">🎭 Drama</button>
+  </div>
+
+  <div class="content">
+    <div id="home">
+      <div class="grid" id="videoGrid"></div>
+    </div>
+
+    <div id="player" class="player">
+      <button class="back" onclick="showHome()">⬅ Volver</button>
+      <h2 id="playerTitle"></h2>
+
+      <div class="actions">
+        <button id="prevBtn">⏮</button>
+        <button id="playPauseBtn">⏯</button>
+        <button id="nextBtn">⏭</button>
+        <button id="tvBtn">📺 Ver en TV</button>
+        <a id="downloadBtn" download>⬇ Descargar</a>
+        <button id="renameBtn">✏ Renombrar</button>
+        <button id="deleteBtn" class="danger">🗑 Borrar</button>
+        <div id="playerStars"></div>
+      </div>
+
+      <video id="videoPlayer" controls></video>
+
+      <h3>💬 Comentarios</h3>
+      <div id="commentsList"></div>
+      <input id="commentInput" placeholder="Escribe un comentario...">
+      <button id="sendComment">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+setTimeout(()=>{document.getElementById("splash").style.display="none";},1500);
+
+// 🎬 Video demo ultra pequeño (pantalla negra)
+const demoVideo = "data:video/mp4;base64,AAAAHGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAGfbW9vdgAAAGxtdmhkAAAAANr1X3aa9V92AAACoAAAABAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAABidWR0YQAAAFptZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAC1pbHN0AAAAJal0b28AAAAdZGF0YQAAAAEAAAAATGF2ZjU2LjI2LjEwMA==";
+
+let videos = JSON.parse(localStorage.getItem("cinema_videos")||"null");
+if(!videos){
+ videos=[{
+  title:"🎬 Video de prueba",
+  src:demoVideo,
+  rating:5,
+  category:"Demo",
+  comments:["Este es un video de ejemplo 😎"]
+ }];
+}
+
+let currentVideo=null;
+let currentIndex=-1;
+
+const grid=document.getElementById("videoGrid");
+const home=document.getElementById("home");
+const player=document.getElementById("player");
+const videoPlayer=document.getElementById("videoPlayer");
+const playerTitle=document.getElementById("playerTitle");
+const search=document.getElementById("search");
+const upload=document.getElementById("upload");
+const downloadBtn=document.getElementById("downloadBtn");
+const playerStars=document.getElementById("playerStars");
+const renameBtn=document.getElementById("renameBtn");
+const deleteBtn=document.getElementById("deleteBtn");
+const playPauseBtn=document.getElementById("playPauseBtn");
+const prevBtn=document.getElementById("prevBtn");
+const nextBtn=document.getElementById("nextBtn");
+const tvBtn=document.getElementById("tvBtn");
+
+const commentsList=document.getElementById("commentsList");
+const commentInput=document.getElementById("commentInput");
+const sendComment=document.getElementById("sendComment");
+
+function save(){localStorage.setItem("cinema_videos",JSON.stringify(videos));}
+
+function makeStars(cur,cb){
+ let d=document.createElement("div");
+ for(let i=1;i<=5;i++){
+  let s=document.createElement("span");
+  s.textContent="★";
+  if(i<=cur)s.classList.add("on");
+  s.onclick=()=>cb(i);
+  d.appendChild(s);
+ }
+ return d;
+}
+
+function render(list){
+ grid.innerHTML="";
+ if(list.length==0){grid.innerHTML="No hay videos";return;}
+ list.forEach(v=>{
+  let c=document.createElement("div");
+  c.className="card";
+  let stars=makeStars(v.rating||0,r=>{v.rating=r;save();render(videos);});
+  c.innerHTML=`<video src="${v.src}" muted></video><div class="title">${v.title} (${v.category||"Sin"})</div>`;
+  c.appendChild(stars);
+  c.onclick=()=>openVideo(v);
+  grid.appendChild(c);
+ });
+}
+
+function renderComments(){
+ commentsList.innerHTML="";
+ if(!currentVideo.comments) currentVideo.comments=[];
+ currentVideo.comments.forEach(c=>{
+  let d=document.createElement("div");
+  d.textContent="💬 "+c;
+  commentsList.appendChild(d);
+ });
+}
+
+function openVideo(v){
+ currentVideo=v;
+ currentIndex=videos.indexOf(v);
+ home.style.display="none";
+ player.style.display="block";
+ playerTitle.textContent=v.title;
+ videoPlayer.src=v.src;
+ downloadBtn.href=v.src;
+ playerStars.innerHTML="";
+ playerStars.appendChild(makeStars(v.rating||0,r=>{v.rating=r;save();openVideo(v);render(videos);}));
+ renderComments();
+ videoPlayer.play();
+}
+
+function showHome(){
+ player.style.display="none";
+ home.style.display="block";
+ videoPlayer.pause();
+}
+
+upload.onchange=()=>{
+ let f=upload.files[0];
+ if(!f)return;
+ let url=URL.createObjectURL(f);
+ let title=prompt("Nombre:",f.name)||f.name;
+ let cat=prompt("Categoria:","Acción")||"Acción";
+ videos.unshift({title,src:url,rating:0,category:cat,comments:[]});
+ save();render(videos);
+}
+
+renameBtn.onclick=()=>{
+ if(!currentVideo)return;
+ let n=prompt("Nuevo nombre:",currentVideo.title);
+ if(n){currentVideo.title=n;save();render(videos);playerTitle.textContent=n;}
+}
+
+deleteBtn.onclick=()=>{
+ if(!currentVideo)return;
+ if(confirm("¿Borrar?")){
+  videos=videos.filter(v=>v!==currentVideo);
+  save();showHome();render(videos);
+ }
+}
+
+playPauseBtn.onclick=()=>{
+ if(videoPlayer.paused){videoPlayer.play();}else{videoPlayer.pause();}
+}
+
+prevBtn.onclick=()=>{if(currentIndex>0)openVideo(videos[currentIndex-1]);}
+nextBtn.onclick=()=>{if(currentIndex<videos.length-1)openVideo(videos[currentIndex+1]);}
+
+tvBtn.onclick=()=>{
+ alert("Para ver en la TV:\n\n1) Conecta un cable HDMI\nO\n2) Presiona Windows + K y duplica pantalla");
+}
+
+sendComment.onclick=()=>{
+ if(!currentVideo)return;
+ if(commentInput.value.trim()=="")return;
+ if(!currentVideo.comments)currentVideo.comments=[];
+ currentVideo.comments.push(commentInput.value);
+ commentInput.value="";
+ save();
+ renderComments();
+}
+
+search.oninput=()=>{
+ let q=search.value.toLowerCase();
+ render(videos.filter(v=>v.title.toLowerCase().includes(q)));
+}
+
+function filterCategory(c){
+ if(c=="Todas")render(videos);
+ else render(videos.filter(v=>v.category==c));
+}
+
+document.getElementById("fullscreenBtn").onclick=()=>{
+ if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+ else document.exitFullscreen();
+}
+
+render(videos);
+</script>
+
+</body>
+</html>
